@@ -1,0 +1,126 @@
+---
+title: "Fundamentals of Bayesian Data Analysis in R"
+author: "Hamed Bastan-Hagh"
+output: 
+  html_document: 
+    highlight: kate
+    theme: journal
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Notes from DataCamp course [Fundamentals of Bayesian Data Analysis in R][1].
+
+```{r}
+library(tidyverse)
+```
+
+
+# Chapter One: What is Bayesian Data Analysis?
+
+Focus is on binomial setup. Use a helper function, `prop_model()`, to visualise how the posterior distribution changes given new data.
+
+```{r}
+prop_model <- function (data = c(), 
+                        prior_prop = c(1, 1), 
+                        n_draws = 10000, 
+                        show_plot = TRUE) {
+    data <- as.logical(data)
+    proportion_success <- c(0, seq(0, 1, length.out = 100), 1)
+    data_indices <- round(seq(0, 
+                              length(data), 
+                              length.out = min(length(data) + 1, 
+                                               20)))
+    post_curves <- purrr::map_dfr(
+        data_indices, 
+        function(i) {
+            value <- ifelse(i == 0, 
+                            "Prior", 
+                            ifelse(data[i], 
+                                   "Success", 
+                                   "Failure"))
+            label <- paste0("n=", i)
+            probability <- dbeta(proportion_success, 
+                                 prior_prop[1] + 
+                                     sum(data[seq_len(i)]), 
+                                 prior_prop[2] + 
+                                     sum(!data[seq_len(i)]))
+            probability <- probability/max(probability)
+            dplyr::data_frame(value, 
+                              label, 
+                              proportion_success, 
+                              probability)
+        })
+    post_curves$label <- forcats::fct_rev(factor(post_curves$label, 
+                                                 levels = paste0("n=", 
+                                                                 data_indices)))
+    post_curves$value <- factor(post_curves$value, 
+                                levels = c("Prior", "Success", "Failure"))
+    p <- ggplot2::ggplot(post_curves, 
+                         ggplot2::aes(x = proportion_success, 
+                                      y = label, 
+                                      height = probability, 
+                                      fill = value)) + 
+        ggridges::geom_density_ridges(stat = "identity", 
+                                      color = "white", 
+                                      alpha = 0.8, 
+                                      panel_scaling = TRUE, 
+                                      size = 1) + 
+        ggplot2::scale_y_discrete("", expand = c(0.01, 0)) + 
+        ggplot2::scale_x_continuous("Underlying proportion of success") + 
+        ggplot2::scale_fill_manual(values = hcl(120 * 2:0 + 15, 100, 65),
+                                   name = "", 
+                                   drop = FALSE, 
+                                   labels = c("Prior   ", 
+                                              "Success   ", 
+                                              "Failure   ")) +
+        ggplot2::theme_light(base_size = 18) +
+        ggplot2::theme(legend.position = "top")
+    if (show_plot) {
+        print(p)
+    }
+    invisible(rbeta(n_draws, 
+                    prior_prop[1] + sum(data), 
+                    prior_prop[2] + sum(!data)))
+}
+```
+
+Run this on a simple set of results.
+
+```{r}
+prop_model(data = c(1, 1, 0, 0))
+```
+
+Try something a bit more complex.
+
+```{r}
+set.seed(1711)
+prop_model(data = sample(c(0, 1), size = 12, replace = TRUE))
+```
+
+One example is a drug that might prevent people turning into zombies. Suppose it works for two of thirteen people, what would the posterior look like? Gives an example to show that order of updating doesn't matter.
+
+```{r}
+zombie_data <- c(rep(0, 11), 1, 1)
+set.seed(123)
+prop_model(sample(zombie_data))
+set.seed(124)
+prop_model(sample(zombie_data))
+```
+
+Distributions end up identical.
+
+The function also returns a vector of samples from the posterior distribution, which we can use for plotting.
+
+```{r}
+set.seed(125)
+zombie_prop <- prop_model(sample(zombie_data))
+tibble(p = zombie_prop) %>% 
+    ggplot(aes(x = p)) + 
+    geom_histogram(bins = 30, fill = "palegreen4") + 
+    theme_light()
+```
+
+[1]: https://www.datacamp.com/courses/fundamentals-of-bayesian-data-analysis-in-r
