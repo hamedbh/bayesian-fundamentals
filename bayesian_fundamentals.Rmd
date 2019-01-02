@@ -123,4 +123,161 @@ tibble(p = zombie_prop) %>%
     theme_light()
 ```
 
+# Chapter Two: How Does Bayesian Inference Work?
+
+Three elements needed for a Bayesian model:
+
+1. Data;
+2. Generative Model;
+3. Priors.
+
+## What is a Generative Model?
+
+A computer programme, mathematical expression, or set of rules into which we can feed fixed parameter values and generate data. Can use an example with the zombies, for which we need two parameters: 
+
+1. The proportion of zombies cured by the drug (`prop_success`);
+2. The total number of zombies (`n_zombies`).
+
+```{r}
+# start by setting values for the parameters
+prop_success <- 0.15
+n_zombies <- 13
+
+# Simulate some data, assuming that the outcome depends only on prop_success
+sum(runif(n = n_zombies) < prop_success)
+
+# Can run this simulation many times to get different counts
+replicate(100, sum(runif(n = n_zombies) < prop_success))
+```
+
+This is only doing what `rbinom()` does.
+
+```{r}
+rbinom(n = 100, size = 13, prob = 0.15)
+```
+
+This allows for generating data from known parameters. But typically it's the reverse that's true: we have data and the parameters are unknown, so we need to estimate them.
+
+Switch to a more realistic example: when considering placing online adverts on a social media platform, success is now defined as the person clicking on our ad. The social media company, Wastebook, says that 10% of ads get clicked. We can simulate this and visualise the result.
+
+```{r}
+# Run the simulation 100,000 times and plot a histogram
+click_counts <- rbinom(1e5, 100, 0.1)
+tibble(clicks = click_counts) %>% 
+    ggplot(aes(x = clicks)) + 
+    geom_histogram(binwidth = 1) + 
+    scale_x_continuous(breaks = seq(0, max(click_counts), by = 5)) + 
+    theme_light()
+```
+
+## Prior Probability Distribution
+
+The prior distributions for parameters should reflect our uncertainty. We can set the number of adverts (in this case, 100) ourselves, so there is little uncertainty. But a click-through rate of 10% is both high and a conveniently round number! Suppose we think the true value of the click-through rate $p \in [0, 0.2]$. We can then simulate from that instead.
+
+```{r}
+# Generate values for p, then generate the click counts again.
+click_probs <- runif(1e5, min = 0, max = 0.2)
+click_counts <- rbinom(1e5, 100, click_probs)
+tibble(clicks = click_counts) %>% 
+    ggplot(aes(x = clicks)) + 
+    geom_histogram(binwidth = 1) + 
+    scale_x_continuous(breaks = seq(0, max(click_counts), by = 5)) + 
+    theme_light()
+```
+
+Now suppose we go ahead with the advert, and get 13 clicks on 100 ads. What does that tell us about $p$?
+
+```{r}
+# Build tibble for the priors
+prior <- tibble(prob = click_probs, 
+                clicks = click_counts)
+head(prior)
+
+# Posterior tibble is just those that fit the results, i.e. 13 clicks
+posterior <- prior %>% 
+    filter(clicks == 13)
+head(posterior)
+
+# Visualise the distribution of p in the posterior  
+posterior %>% 
+    ggplot(aes(x = prob)) + 
+    geom_histogram(bins = 20) + 
+    theme_light()
+```
+
+Now we can sample from this distribution of probabilities to get an idea of how the advert might perform in the future.
+
+```{r}
+forecast <- posterior %>% 
+    dplyr::select(prob) %>% 
+    mutate(clicks = map_int(prob, 
+                            ~ rbinom(1, 100, .x)))
+forecast %>% 
+    ggplot(aes(x = clicks)) + 
+    geom_histogram(binwidth = 1) + 
+    scale_x_continuous(breaks = seq(0, max(forecast$clicks), by = 5)) + 
+    theme_light()
+```
+
+We can use `forecast` to answer questions: how likely are we to get more than 5, 10, 15 clicks?
+
+```{r}
+map_dbl(c(5, 10, 15), 
+        ~ mean(forecast$clicks >= .x))
+```
+
+Can repeat this with the prior that $p \sim \text{Beta}(2, 8)$, as plotted below.
+
+```{r}
+curve(dbeta(x, 2, 8), 0, 1)
+```
+
+```{r}
+click_probs <- rbeta(1e5, shape1 = 2, shape2 = 8)
+click_counts <- rbinom(1e5, 100, click_probs)
+tibble(clicks = click_counts) %>% 
+    ggplot(aes(x = clicks)) + 
+    geom_histogram(binwidth = 1) + 
+    scale_x_continuous(breaks = seq(0, max(click_counts), by = 5)) + 
+    theme_light()
+```
+
+How does this fit with the results of 13 clicks?
+
+```{r}
+# Build tibble for the priors
+prior <- tibble(prob = click_probs, 
+                clicks = click_counts)
+head(prior)
+
+# Posterior tibble is just those that fit the results, i.e. 13 clicks
+posterior <- prior %>% 
+    filter(clicks == 13)
+head(posterior)
+
+# Visualise the distribution of p in the posterior  
+posterior %>% 
+    ggplot(aes(x = prob)) + 
+    geom_histogram(bins = 20) + 
+    theme_light()
+```
+
+```{r}
+forecast <- posterior %>% 
+    dplyr::select(prob) %>% 
+    mutate(clicks = map_int(prob, 
+                            ~ rbinom(1, 100, .x)))
+forecast %>% 
+    ggplot(aes(x = clicks)) + 
+    geom_histogram(binwidth = 1) + 
+    scale_x_continuous(breaks = seq(0, max(forecast$clicks), by = 5)) + 
+    theme_light()
+```
+
+```{r}
+map_dbl(c(5, 10, 15), 
+        ~ mean(forecast$clicks >= .x))
+```
+
+
 [1]: https://www.datacamp.com/courses/fundamentals-of-bayesian-data-analysis-in-r
