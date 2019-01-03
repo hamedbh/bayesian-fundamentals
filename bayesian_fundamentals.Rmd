@@ -100,7 +100,7 @@ set.seed(1711)
 prop_model(data = sample(c(0, 1), size = 12, replace = TRUE))
 ```
 
-One example is a drug that might prevent people turning into zombies. Suppose it works for two of thirteen people, what would the posterior look like? Gives an example to show that order of updating doesn't matter.
+One example is a drug that might prevent people turning into zombies. Suppose it works for two of thirteen people, what would the posterior look like? NB. Gives an example to show that order of updating doesn't matter.
 
 ```{r}
 zombie_data <- c(rep(0, 11), 1, 1)
@@ -158,7 +158,7 @@ rbinom(n = 100, size = 13, prob = 0.15)
 
 This allows for generating data from known parameters. But typically it's the reverse that's true: we have data and the parameters are unknown, so we need to estimate them.
 
-Switch to a more realistic example: when considering placing online adverts on a social media platform, success is now defined as the person clicking on our ad. The social media company, Wastebook, says that 10% of ads get clicked. We can simulate this and visualise the result.
+Switch to a more realistic example: we are considering placing online adverts on a social media platform, Wastebook. Success is now defined as the person clicking on our ad. Wastebook says that 10% of ads get clicked. We can simulate this and visualise the result.
 
 ```{r}
 # Run the simulation 100,000 times and plot a histogram
@@ -172,7 +172,7 @@ tibble(clicks = click_counts) %>%
 
 ## Prior Probability Distribution
 
-The prior distributions for parameters should reflect our uncertainty. We can set the number of adverts (in this case, 100) ourselves, so there is little uncertainty. But a click-through rate of 10% is both high and a conveniently round number! Suppose we think the true value of the click-through rate $p \in [0, 0.2]$. We can then simulate from that instead.
+The prior distributions for parameters should reflect our uncertainty. We can set the number of adverts (in this case, 100) ourselves, so there is little uncertainty. But a click-through rate of 10% is both high and a conveniently round number! Suppose we think the true value of the click-through rate $p \sim \text{Uniform}(0, 0.2)$. We can then simulate from that instead.
 
 ```{r}
 # Generate values for p, then generate the click counts again.
@@ -226,14 +226,14 @@ map_dbl(c(5, 10, 15),
         ~ mean(forecast$clicks >= .x))
 ```
 
-Can repeat this with the prior that $p \sim \text{Beta}(2, 8)$, as plotted below.
+Can repeat this with the prior that $p \sim \text{Beta}(2, 18)$, as plotted below.
 
 ```{r}
-curve(dbeta(x, 2, 8), 0, 1)
+curve(dbeta(x, 2, 18), 0, 1)
 ```
 
 ```{r}
-click_probs <- rbeta(1e5, shape1 = 2, shape2 = 8)
+click_probs <- rbeta(1e5, shape1 = 2, shape2 = 18)
 click_counts <- rbinom(1e5, 100, click_probs)
 tibble(clicks = click_counts) %>% 
     ggplot(aes(x = clicks)) + 
