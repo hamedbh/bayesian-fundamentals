@@ -176,8 +176,8 @@ The prior distributions for parameters should reflect our uncertainty. We can se
 
 ```{r}
 # Generate values for p, then generate the click counts again.
-click_probs <- runif(1e5, min = 0, max = 0.2)
-click_counts <- rbinom(1e5, 100, click_probs)
+click_props <- runif(1e5, min = 0, max = 0.2)
+click_counts <- rbinom(1e5, 100, click_props)
 tibble(clicks = click_counts) %>% 
     ggplot(aes(x = clicks)) + 
     geom_histogram(binwidth = 1) + 
@@ -189,7 +189,7 @@ Now suppose we go ahead with the advert, and get 13 clicks on 100 ads. What does
 
 ```{r}
 # Build tibble for the priors
-prior <- tibble(prob = click_probs, 
+prior <- tibble(prop = click_props, 
                 clicks = click_counts)
 head(prior)
 
@@ -200,7 +200,7 @@ head(posterior)
 
 # Visualise the distribution of p in the posterior  
 posterior %>% 
-    ggplot(aes(x = prob)) + 
+    ggplot(aes(x = prop)) + 
     geom_histogram(bins = 20) + 
     theme_light()
 ```
@@ -209,8 +209,8 @@ Now we can sample from this distribution of probabilities to get an idea of how 
 
 ```{r}
 forecast <- posterior %>% 
-    dplyr::select(prob) %>% 
-    mutate(clicks = map_int(prob, 
+    dplyr::select(prop) %>% 
+    mutate(clicks = map_int(prop, 
                             ~ rbinom(1, 100, .x)))
 forecast %>% 
     ggplot(aes(x = clicks)) + 
@@ -233,8 +233,8 @@ curve(dbeta(x, 2, 18), 0, 1)
 ```
 
 ```{r}
-click_probs <- rbeta(1e5, shape1 = 2, shape2 = 18)
-click_counts <- rbinom(1e5, 100, click_probs)
+click_props <- rbeta(1e5, shape1 = 2, shape2 = 18)
+click_counts <- rbinom(1e5, 100, click_props)
 tibble(clicks = click_counts) %>% 
     ggplot(aes(x = clicks)) + 
     geom_histogram(binwidth = 1) + 
@@ -246,7 +246,7 @@ How does this fit with the results of 13 clicks?
 
 ```{r}
 # Build tibble for the priors
-prior <- tibble(prob = click_probs, 
+prior <- tibble(prop = click_props, 
                 clicks = click_counts)
 head(prior)
 
@@ -257,15 +257,15 @@ head(posterior)
 
 # Visualise the distribution of p in the posterior  
 posterior %>% 
-    ggplot(aes(x = prob)) + 
+    ggplot(aes(x = prop)) + 
     geom_histogram(bins = 20) + 
     theme_light()
 ```
 
 ```{r}
 forecast <- posterior %>% 
-    dplyr::select(prob) %>% 
-    mutate(clicks = map_int(prob, 
+    dplyr::select(prop) %>% 
+    mutate(clicks = map_int(prop, 
                             ~ rbinom(1, 100, .x)))
 forecast %>% 
     ggplot(aes(x = clicks)) + 
@@ -279,5 +279,206 @@ map_dbl(c(5, 10, 15),
         ~ mean(forecast$clicks >= .x))
 ```
 
+# Why Use Bayesian Analysis?
+
+Some reasons given by Rasmus:
+
+1. Can include information sources as well as the data (e.g. subject matter expertise encoded in the priors).
+2. Make comparisons between groups and data sets (e.g. parameter estimates).
+3. Use the results for decision analysis.
+4. Change the underlying statistical model with relatively little effort.
+
+## Including Information
+
+This could be:
+
+- background information;
+- expert opinion;
+- common knowledge.
+
+Suppose we had asked Wastebook about the range of clickthrough rates they see; they respond saying that 5% is the most common, but they see rates anywhere from 2-8%. (The 10% was just marketing!)
+
+Best place to include this is in the prior, setting up $p \sim \text{Beta}(\alpha, \beta)$ with sensible values for $\alpha$ and $\beta$.
+
+```{r}
+curve(dbeta(x, 5, 95))
+```
+
+This looks about right. Now we can run the simulation again and compare the prior and posterior distributions of $p$.
+
+```{r}
+n_sims <- 1e6
+click_props <- rbeta(n_sims, shape1 = 5, shape2 = 95)
+click_counts <- rbinom(n_sims, 100, click_props)
+
+# Build tibble for the priors
+prior <- tibble(prop = click_props, 
+                clicks = click_counts)
+
+# Posterior tibble is just those that fit the results, i.e. 13 clicks
+posterior <- prior %>% 
+    filter(clicks == 13)
+
+# Visualise the distributions of p in the prior and posterior
+prior %>% 
+    transmute(prop, 
+              prior_post = "prior") %>% 
+    bind_rows(posterior %>% 
+                  transmute(prop, 
+              prior_post = "posterior")) %>% 
+    mutate(prior_post = factor(prior_post, 
+                               levels = c("prior", "posterior"))) %>% 
+    ggplot(aes(x = prop)) + 
+    geom_histogram(bins = 40) + 
+    facet_wrap(~ prior_post, scales = "free") + 
+    theme_light()
+```
+
+This prior now captures the information from Wastebook, and the posterior shows the impact of the results of the actual posting (i.e. 13 successes from 100 trials).
+
+## Make Comparisons Between Groups and Datasets
+
+Now suppose that the previous adverts were video, but we want to try text adverts as well. We get 6 clicks out of 100 adverts. Using the same prior for each (returning to $p \sim \text{Uniform}(0, 0.2)$ instead of the $\text{Beta}$) we can now compare the posterior distributions for each.
+
+```{r}
+n_sims <- 1e6
+click_props <- runif(n_sims, 0, 0.2)
+click_counts <- rbinom(n_sims, 100, click_props)
+
+# Build tibble for the priors
+prior <- tibble(prop = click_props, 
+                clicks = click_counts)
+
+# Posterior tibble for video is just those that fit the results, i.e. 13 clicks
+posterior_video <- prior %>% 
+    filter(clicks == 13) %>% 
+    mutate(prior_post = "posterior_video")
+
+# And for text
+posterior_text <- prior %>% 
+    filter(clicks == 6) %>% 
+    mutate(prior_post = "posterior_text")
+
+# Visualise the distributions of p in the prior and two posteriors
+prior %>% 
+    transmute(prop, 
+              prior_post = "prior") %>% 
+    bind_rows(posterior_video, 
+              posterior_text) %>% 
+    mutate(prior_post = factor(prior_post, 
+                               levels = c("prior", 
+                                          "posterior_video", 
+                                          "posterior_text"))) %>% 
+    ggplot(aes(x = prop)) + 
+    geom_histogram(bins = 40) + 
+    scale_y_continuous(labels = scales::comma) + 
+    facet_wrap(~ prior_post, scales = "free_y") + 
+    theme_light()
+```
+
+The posterior for each peaks where we'd expect, but the posterior for video is more diffuse and there is overlap between them. How much overlap? In other words: given these posterior distributions, how likely is it that the effectiveness of text adverts is greater than that for video? Or: how likely is it that $p_{text} > p_{video}$?
+
+```{r}
+num_rows <- min(nrow(posterior_text), nrow(posterior_video))
+posterior <- bind_cols(posterior_video %>% 
+                           sample_n(num_rows) %>% 
+                           transmute(vid_prop = prop), 
+                       posterior_text %>% 
+                           sample_n(num_rows) %>% 
+                           transmute(text_prop = prop)) %>% 
+    mutate(prop_diff = vid_prop - text_prop)
+
+# Visualise distribution of prop_diff
+posterior %>% 
+    ggplot(aes(x = prop_diff)) + 
+    geom_histogram(binwidth = 0.01) + 
+    geom_vline(xintercept = 0, colour = "red")
+
+# How likely is it that p_text > p_video
+mean(posterior$prop_diff < 0)
+```
+
+It's unlikely that the text ad is 'better' than the video ad.
+
+## Decision Analysis
+
+Estimates of parameters are not, on their own, always that useful. The next step is to convert those estimates into something that can help with making decisions.
+
+The last section showed quite convincingly that the video advert will generate more visitors to our website than text, but they are unlikely to cost the same. How would that affect decisions about which to use?
+
+```{r}
+# Costs for adverts and the money generated from an average visitor
+vid_cost <- 0.25
+text_cost <- 0.05
+visitor_spend <- 2.53
+
+# Add columns with profit figures
+posterior <- posterior %>% 
+    mutate(vid_profit = (vid_prop * visitor_spend) - vid_cost, 
+           text_profit = (text_prop * visitor_spend) - text_cost) %>% 
+    mutate(profit_diff = vid_profit - text_profit)
+
+# Visualise the profit difference
+posterior %>% 
+    ggplot(aes(x = profit_diff)) + 
+    geom_histogram(binwidth = 0.01) + 
+    coord_cartesian(xlim = c(-0.5, 0.5)) + 
+    geom_vline(xintercept = 0) +
+    scale_x_continuous("Text ad better <<< £ difference >>> Video ad better") + 
+    theme_light()
+
+# How often is profit_diff < 0?
+mean(posterior$profit_diff < 0)
+```
+
+Text ads are more profitable `r 100 * round(mean(posterior$profit_diff < 0), 2)`% of the time.
+
+## Change the Underlying Statistical Model
+
+Now we want to try out a banner ad: instead of paying per appearance, we now pay per day. How many visits can we expect if we pay for this banner?
+
+This is best modelled as a Poisson process, where the number of clicks per unit time is the only parameter, $\lambda$.
+
+```{r}
+# Use 20 as a starting estimate for lambda
+tibble(banner_clicks = rpois(1e6, 20)) %>% 
+    ggplot(aes(x = banner_clicks)) + 
+    geom_histogram(binwidth = 1) + 
+    theme_light()
+```
+
+Now suppose we got 19 clicks, what does that do to the posterior? We will use a prior that $\lambda \sim \text{Uniform}(0, 80)$.
+
+```{r}
+n_sims <- 1e6
+click_means <- runif(n_sims, 0, 80)
+click_counts <- rpois(n_sims, click_means)
+
+# Build tibble for the priors
+prior <- tibble(lambda = click_means, 
+                clicks = click_counts)
+
+# Posterior tibble for video is just those that fit the results, i.e. 13 clicks
+posterior <- prior %>% 
+    filter(clicks == 19) %>% 
+    mutate(prior_post = "posterior")
+
+# Visualise the distributions of lambda in the prior and posterior
+prior %>% 
+    transmute(lambda, 
+              prior_post = "prior") %>% 
+    bind_rows(posterior) %>% 
+    mutate(prior_post = factor(prior_post, 
+                               levels = c("prior", 
+                                          "posterior"))) %>% 
+    ggplot(aes(x = lambda)) + 
+    geom_histogram(bins = 40) + 
+    scale_y_continuous(labels = scales::comma) + 
+    facet_wrap(~ prior_post, scales = "free_y") + 
+    theme_light()
+
+# What is the 90% credible interval for lambda?
+quantile(posterior$lambda, c(0.05, 0.95))
+```
 
 [1]: https://www.datacamp.com/courses/fundamentals-of-bayesian-data-analysis-in-r
