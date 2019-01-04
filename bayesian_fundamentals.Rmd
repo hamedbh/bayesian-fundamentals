@@ -481,4 +481,71 @@ prior %>%
 quantile(posterior$lambda, c(0.05, 0.95))
 ```
 
+# Bayesian Inference with Bayes' Theorem
+
+The method above is not efficient: in the last example we generated `r format(n_sims, big.mark = ",", scientific = FALSE)` samples but then used only `r format(nrow(posterior), big.mark = ",", scientific = FALSE)` of them by conditioning on the actual results for the banner ad. It was easy to code, but with bigger datasets and/or more complicated models, we need something more efficient. To do this we need some probability theory.
+
+## Probability Theory Recap
+
+Calculating likelihoods is important, can use the `d*()` functions, such as `dbinom()`, to calculate the probability of specific values for any distribution.
+
+```{r}
+# Calculate the likelihood of getting 13 clicks on 100 ads with 0.1 prob of a 
+# click on each ad using the old method
+n_ads_shown <- 100
+proportion_clicks <- 0.1
+n_visitors <- rbinom(n = 99999, 
+                     size = n_ads_shown, 
+                     prob = proportion_clicks)
+prob_13_visitors_old <- mean(n_visitors == 13)
+prob_13_visitors_old
+# Then again using dbinom()
+prob_13_visitors_new <- dbinom(x = 13, size = 100, prob = 0.1)
+prob_13_visitors_new
+```
+
+Can now use these techniques to tackle the problem from the previous section, but using exact calculations instead of simulation.
+
+```{r}
+# Number of ads is known for sure
+n_ads_shown <- 100
+
+# Number of visitors and proportion of clicks are to be estimated, so we set 
+# these to all possible values (within reason)
+n_visitors <- seq(0, 100)
+proportion_clicks <- seq(0, 1, by = 0.01)
+pars <- expand.grid(n_visitors = n_visitors, 
+                    proportion_clicks = proportion_clicks) %>% 
+    as_tibble() %>% 
+    # Add the prior using dbeta() (although the course used dunif())
+    mutate(prior = dbeta(x = proportion_clicks, 
+                         shape1 = 10, 
+                         shape2 = 90)) %>% 
+    # Add the likelihood using dbinom
+    mutate(likelihood = dbinom(x = n_visitors, 
+                               size = n_ads_shown, 
+                               prob = proportion_clicks)) %>% 
+    # Add unstandardised probability
+    mutate(probability = prior * likelihood) %>% 
+    # Standardise the probability
+    mutate(probability = probability/sum(probability))
+
+# Now condition on getting 13 clicks, i.e. drop other data
+posterior <- pars %>% 
+    filter(n_visitors == 13) %>% 
+    # Restandardise the probability
+    mutate(probability = probability/sum(probability))
+
+# Visualise
+posterior %>% 
+    filter(proportion_clicks < 0.4) %>% 
+    ggplot(aes(x = proportion_clicks, 
+               y = probability)) + 
+    geom_col() + 
+    scale_x_continuous(breaks = seq(0, 0.4, 0.05)) + 
+    theme_light()
+```
+
+
+
 [1]: https://www.datacamp.com/courses/fundamentals-of-bayesian-data-analysis-in-r
